@@ -14,7 +14,6 @@
  */
 
 var fs = require('pn/fs'); // https://www.npmjs.com/package/pn
-var svg2png = require('svg2png');
 var should = require('should'),
     path = require('path'),
     mkdirp = require('mkdirp'),
@@ -22,11 +21,7 @@ var should = require('should'),
     glob = require('glob'),
     File = require('vinyl'),
     _ = require('lodash'),
-    imageDiff = require('image-diff'),
     mustache = require('mustache'),
-    execFile = require('child_process').execFile,
-    phantomjs = require('phantomjs-prebuilt').path,
-    capturePhantomScript = path.resolve(__dirname, 'script/capture.phantom.js'),
     sass = require('node-sass'),
     less = require('less'),
     stylus = require('stylus'),
@@ -90,64 +85,6 @@ function writeFile(file, content) {
     } catch (e) {
         return null;
     }
-}
-
-/**
- * Capture a screenshot of a URL using PhantomJS (synchronous)
- *
- * @param {String} src                Source file
- * @param {String} target            Screenshot file
- * @param {Function} cb                Function
- */
-function capturePhantom(src, target, cb) {
-    execFile(phantomjs, [capturePhantomScript, src, target], function (err, stdout, stderr) {
-        if (err) {
-            cb(err);
-        } else if (stdout.length > 0) {
-            cb((stdout.toString().trim() === 'success') ? null : new Error('PhantomJS couldn\'t capture "' + src + '"'));
-        } else if (stderr.length > 0) {
-            cb(new Error(stderr.toString().trim()));
-        } else {
-            cb(new Error('PhantomJS couldn\'t capture "' + src + '"'));
-        }
-    });
-}
-
-/**
- * Rasterize an SVG file and compare it to an expected image
- *
- * @param {String} svg                SVG file path
- * @param {String} png                PNG file path
- * @param {String} expected            Expected PNG file path
- * @param {String} diff                Diff file path
- * @param {Function} done            Callback
- * @param {String} msg              Message
- */
-function compareSvg2Png(svg, png, expected, diff, done, msg) {
-    mkdirp.sync(path.dirname(png));
-    var ecb = function (err) {
-        console.log(err);
-        should(err).not.ok;
-        done();
-    };
-    fs.readFile(svg)
-        .then(svg2png)
-        .then(function (buffer) {
-            fs.writeFile(png, buffer)
-                .then(function () {
-                    imageDiff({
-                        actualImage: png,
-                        expectedImage: expected,
-                        diffImage: diff
-                    }, function (err, imagesAreSame) {
-                        should(err).not.ok;
-                        should.ok(imagesAreSame, msg);
-                        done();
-                    });
-                })
-                .catch(ecb);
-        })
-        .catch(ecb);
 }
 
 before(function (done) {
@@ -290,62 +227,6 @@ describe('svg-sprite', function () {
                 });
             });
 
-            // Test sprite renderings
-            describe('creates visually correct sprite with', function () {
-
-                // Vertical layout
-                it('vertical layout', function (done) {
-                    this.timeout(20000);
-                    compareSvg2Png(
-                        path.join(__dirname, '..', 'tmp', 'css', 'svg', svg.vertical),
-                        path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.vertical.png'),
-                        path.join(__dirname, 'expected', 'png', 'css.vertical.png'),
-                        path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.vertical.diff.png'),
-                        done,
-                        'The vertical sprite doesn\'t match the expected one!'
-                    );
-                });
-
-                // Horizontal layout
-                it('horizontal layout', function (done) {
-                    this.timeout(20000);
-                    compareSvg2Png(
-                        path.join(__dirname, '..', 'tmp', 'css', 'svg', svg.horizontal),
-                        path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.horizontal.png'),
-                        path.join(__dirname, 'expected', 'png', 'css.horizontal.png'),
-                        path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.horizontal.diff.png'),
-                        done,
-                        'The horizontal sprite doesn\'t match the expected one!'
-                    );
-                });
-
-                // Diagonal layout
-                it('diagonal layout', function (done) {
-                    this.timeout(20000);
-                    compareSvg2Png(
-                        path.join(__dirname, '..', 'tmp', 'css', 'svg', svg.diagonal),
-                        path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.diagonal.png'),
-                        path.join(__dirname, 'expected', 'png', 'css.diagonal.png'),
-                        path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.diagonal.diff.png'),
-                        done,
-                        'The diagonal sprite doesn\'t match the expected one!'
-                    );
-                });
-
-                // Packed layout
-                it('packed layout', function (done) {
-                    this.timeout(20000);
-                    compareSvg2Png(
-                        path.join(__dirname, '..', 'tmp', 'css', 'svg', svg.packed),
-                        path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.packed.png'),
-                        path.join(__dirname, 'expected', 'png', 'css.packed.png'),
-                        path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.packed.diff.png'),
-                        done,
-                        'The packed sprite doesn\'t match the expected one!'
-                    );
-                });
-            });
-
             // Test stylesheet resources
             describe('creates a visually correct stylesheet resource in', function () {
 
@@ -355,22 +236,10 @@ describe('svg-sprite', function () {
 
                     data.css = '../sprite.css';
                     var out = mustache.render(previewTemplate, data),
-                        preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'css.html'), out),
-                        previewImage = path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.html.png');
+                        preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'css.html'), out);
                     preview.should.be.ok;
 
-                    capturePhantom(preview, previewImage, function (error) {
-                        should(error).not.ok;
-                        imageDiff({
-                            actualImage: previewImage,
-                            expectedImage: path.join(__dirname, 'expected', 'png', 'css.html.png'),
-                            diffImage: path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.html.diff.png')
-                        }, function (error, imagesAreSame) {
-                            should(error).not.ok;
-                            should.ok(imagesAreSame, 'The generated CSS preview doesn\'t match the expected one!');
-                            done();
-                        });
-                    });
+                    done();
                 });
 
                 // Sass
@@ -386,22 +255,10 @@ describe('svg-sprite', function () {
 
                             data.css = '../sprite.scss.css';
                             var out = mustache.render(previewTemplate, data),
-                                preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'scss.html'), out),
-                                previewImage = path.join(__dirname, '..', 'tmp', 'css', 'png', 'scss.html.png');
+                                preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'scss.html'), out);
                             preview.should.be.ok;
 
-                            capturePhantom(preview, previewImage, function (error) {
-                                should(error).not.ok;
-                                imageDiff({
-                                    actualImage: previewImage,
-                                    expectedImage: path.join(__dirname, 'expected', 'png', 'css.html.png'),
-                                    diffImage: path.join(__dirname, '..', 'tmp', 'css', 'png', 'scss.html.diff.png')
-                                }, function (error, imagesAreSame) {
-                                    should(error).not.ok;
-                                    should.ok(imagesAreSame, 'The generated Sass preview doesn\'t match the expected one!');
-                                    done();
-                                });
-                            });
+                            done();
                         }
                     );
                 });
@@ -420,22 +277,10 @@ describe('svg-sprite', function () {
 
                             data.css = '../sprite.less.css';
                             var out = mustache.render(previewTemplate, data),
-                                preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'less.html'), out),
-                                previewImage = path.join(__dirname, '..', 'tmp', 'css', 'png', 'less.html.png');
+                                preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'less.html'), out);
                             preview.should.be.ok;
 
-                            capturePhantom(preview, previewImage, function (error) {
-                                should(error).not.ok;
-                                imageDiff({
-                                    actualImage: previewImage,
-                                    expectedImage: path.join(__dirname, 'expected', 'png', 'css.html.png'),
-                                    diffImage: path.join(__dirname, '..', 'tmp', 'css', 'png', 'less.html.diff.png')
-                                }, function (error, imagesAreSame) {
-                                    should(error).not.ok;
-                                    should.ok(imagesAreSame, 'The generated LESS preview doesn\'t match the expected one!');
-                                    done();
-                                });
-                            });
+                            done();
                         });
                     });
                 });
@@ -454,22 +299,10 @@ describe('svg-sprite', function () {
 
                             data.css = '../sprite.styl.css';
                             var out = mustache.render(previewTemplate, data),
-                                preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'styl.html'), out),
-                                previewImage = path.join(__dirname, '..', 'tmp', 'css', 'png', 'styl.html.png');
+                                preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'styl.html'), out);
                             preview.should.be.ok;
 
-                            capturePhantom(preview, previewImage, function (error) {
-                                should(error).not.ok;
-                                imageDiff({
-                                    actualImage: previewImage,
-                                    expectedImage: path.join(__dirname, 'expected', 'png', 'css.html.png'),
-                                    diffImage: path.join(__dirname, '..', 'tmp', 'css', 'png', 'styl.html.diff.png')
-                                }, function (error, imagesAreSame) {
-                                    should(error).not.ok;
-                                    should.ok(imagesAreSame, 'The generated Stylus preview doesn\'t match the expected one!');
-                                    done();
-                                });
-                            });
+                            done();
                         });
                     });
                 });
@@ -499,50 +332,6 @@ describe('svg-sprite', function () {
                     done();
                 });
             });
-
-            describe('creates visually correct sprite with', function () {
-
-                // Packed layout
-                it('packed layout', function (done) {
-                    this.timeout(20000);
-                    compareSvg2Png(
-                        path.join(__dirname, '..', 'tmp', 'view', 'svg', svg.packed),
-                        path.join(__dirname, '..', 'tmp', 'view', 'png', 'view.packed.png'),
-                        path.join(__dirname, 'expected', 'png', 'css.packed.png'),
-                        path.join(__dirname, '..', 'tmp', 'view', 'png', 'view.packed.diff.png'),
-                        done,
-                        'The packed sprite doesn\'t match the expected one!'
-                    );
-                });
-            });
-
-            //// Cannot be tested at the moment as PhantomJS 1.9 doesn't support fragment identifiers with SVG
-            //describe('creates a visually correct stylesheet resource in', function() {
-            //
-            //	it('CSS format', function(done) {
-            //   	this.timeout(20000);
-            //
-            //    	data.css				= '../sprite.css';
-            //    	var previewTemplate		= fs.readFileSync(path.join(__dirname, 'tmpl', 'view.html'), 'utf-8'),
-            //    	out						= mustache.render(previewTemplate, data),
-            //    	preview					= writeFile(path.join(__dirname, '..', 'tmp', 'view', 'html', 'view.html'), out),
-            //    	previewImage			= path.join(__dirname, '..', 'tmp', 'view', 'png', 'view.html.png');
-            //    	preview.should.be.ok;
-            //
-            //    	captureSlimer(preview, previewImage, function(error) {
-            //    		should(error).not.ok;
-            //    		imageDiff({
-            //			actualImage		: previewImage,
-            //			expectedImage	: path.join(__dirname, 'expected', 'png', 'view.html.png'),
-            //			diffImage		: path.join(__dirname, '..', 'tmp', 'view', 'png', 'view.html.diff.png')
-            //		}, function (error, imagesAreSame) {
-            //	    	should(error).not.ok;
-            //	    	should.ok(imagesAreSame, 'The generated CSS preview doesn\'t match the expected one!');
-            //	    	done();
-            //	    });ddr
-            //    	});
-            //	});
-            //});
         });
     });
 
@@ -587,39 +376,15 @@ describe('svg-sprite', function () {
                 });
             });
 
-            it('creates visually correct sprite', function (done) {
-                this.timeout(20000);
-                compareSvg2Png(
-                    path.join(__dirname, '..', 'tmp', 'css', 'svg', svg.vertical),
-                    path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.vertical.centered.png'),
-                    path.join(__dirname, 'expected', 'png', 'css.vertical.centered.png'),
-                    path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.vertical.centered.diff.png'),
-                    done,
-                    'The vertical sprite doesn\'t match the expected one!'
-                );
-            });
-
             it('creates a visually correct stylesheet resource', function (done) {
                 this.timeout(20000);
 
                 data.css = '../sprite.centered.css';
                 var out = mustache.render(previewTemplate, data),
-                    preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'css.vertical.centered.html'), out),
-                    previewImage = path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.vertical.centered.html.png');
+                    preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'css.vertical.centered.html'), out);
                 preview.should.be.ok;
 
-                capturePhantom(preview, previewImage, function (error) {
-                    should(error).not.ok;
-                    imageDiff({
-                        actualImage: previewImage,
-                        expectedImage: path.join(__dirname, 'expected', 'png', 'css.vertical.centered.html.png'),
-                        diffImage: path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.centered.html.diff.png')
-                    }, function (error, imagesAreSame) {
-                        should(error).not.ok;
-                        should.ok(imagesAreSame, 'The generated CSS preview doesn\'t match the expected one!');
-                        done();
-                    });
-                });
+                done();
             });
         });
 
@@ -659,18 +424,6 @@ describe('svg-sprite', function () {
                 });
             });
 
-            it('creates visually correct sprite', function (done) {
-                this.timeout(20000);
-                compareSvg2Png(
-                    path.join(__dirname, '..', 'tmp', 'css', 'svg', svg.horizontal),
-                    path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.horizontal.centered.png'),
-                    path.join(__dirname, 'expected', 'png', 'css.horizontal.centered.png'),
-                    path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.horizontal.centered.diff.png'),
-                    done,
-                    'The horizontal sprite doesn\'t match the expected one!'
-                );
-            });
-
             it('creates a visually correct stylesheet resource', function (done) {
                 this.timeout(20000);
 
@@ -683,22 +436,10 @@ describe('svg-sprite', function () {
 
                         data.css = '../sprite.centered.scss.css';
                         var out = mustache.render(previewTemplate, data),
-                            preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'scss.horizontal.centered.html'), out),
-                            previewImage = path.join(__dirname, '..', 'tmp', 'css', 'png', 'scss.horizontal.centered.html.png');
+                            preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'scss.horizontal.centered.html'), out);
                         preview.should.be.ok;
 
-                        capturePhantom(preview, previewImage, function (error) {
-                            should(error).not.ok;
-                            imageDiff({
-                                actualImage: previewImage,
-                                expectedImage: path.join(__dirname, 'expected', 'png', 'css.horizontal.centered.html.png'),
-                                diffImage: path.join(__dirname, '..', 'tmp', 'css', 'png', 'scss.horizontal.centered.html.diff.png')
-                            }, function (error, imagesAreSame) {
-                                should(error).not.ok;
-                                should.ok(imagesAreSame, 'The generated Sass preview doesn\'t match the expected one!');
-                                done();
-                            });
-                        });
+                        done();
                     }
                 );
             });
@@ -740,18 +481,6 @@ describe('svg-sprite', function () {
                 });
             });
 
-            it('creates visually correct sprite', function (done) {
-                this.timeout(20000);
-                compareSvg2Png(
-                    path.join(__dirname, '..', 'tmp', 'css', 'svg', svg.packed),
-                    path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.packed.centered.png'),
-                    path.join(__dirname, 'expected', 'png', 'css.packed.aligned.png'),
-                    path.join(__dirname, '..', 'tmp', 'css', 'png', 'css.packed.centered.diff.png'),
-                    done,
-                    'The packed sprite doesn\'t match the expected one!'
-                );
-            });
-
             it('creates a visually correct stylesheet resource', function (done) {
                 this.timeout(20000);
 
@@ -765,22 +494,10 @@ describe('svg-sprite', function () {
 
                         data.css = '../sprite.centered.less.css';
                         var out = mustache.render(previewTemplate, data),
-                            preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'less.packed.centered.html'), out),
-                            previewImage = path.join(__dirname, '..', 'tmp', 'css', 'png', 'less.packed.centered.html.png');
+                            preview = writeFile(path.join(__dirname, '..', 'tmp', 'css', 'html', 'less.packed.centered.html'), out);
                         preview.should.be.ok;
 
-                        capturePhantom(preview, previewImage, function (error) {
-                            should(error).not.ok;
-                            imageDiff({
-                                actualImage: previewImage,
-                                expectedImage: path.join(__dirname, 'expected', 'png', 'css.packed.aligned.html.png'),
-                                diffImage: path.join(__dirname, '..', 'tmp', 'css', 'png', 'less.packed.centered.html.diff.png')
-                            }, function (error, imagesAreSame) {
-                                should(error).not.ok;
-                                should.ok(imagesAreSame, 'The generated LESS preview doesn\'t match the expected one!');
-                                done();
-                            });
-                        });
+                        done();
                     });
                 });
             });
@@ -828,39 +545,15 @@ describe('svg-sprite', function () {
                 });
             });
 
-            it('creates visually correct sprite', function (done) {
-                this.timeout(20000);
-                compareSvg2Png(
-                    path.join(__dirname, '..', 'tmp', 'view', 'svg', svg.vertical),
-                    path.join(__dirname, '..', 'tmp', 'view', 'png', 'css.vertical.mixed.png'),
-                    path.join(__dirname, 'expected', 'png', 'css.vertical.mixed.png'),
-                    path.join(__dirname, '..', 'tmp', 'view', 'png', 'css.vertical.mixed.diff.png'),
-                    done,
-                    'The vertical sprite doesn\'t match the expected one!'
-                );
-            });
-
             it('creates a visually correct stylesheet resource', function (done) {
                 this.timeout(20000);
 
                 data.css = '../sprite.mixed.css';
                 var out = mustache.render(previewTemplate, data),
-                    preview = writeFile(path.join(__dirname, '..', 'tmp', 'view', 'html', 'css.vertical.mixed.html'), out),
-                    previewImage = path.join(__dirname, '..', 'tmp', 'view', 'png', 'css.vertical.mixed.html.png');
+                    preview = writeFile(path.join(__dirname, '..', 'tmp', 'view', 'html', 'css.vertical.mixed.html'), out);
                 preview.should.be.ok;
 
-                capturePhantom(preview, previewImage, function (error) {
-                    should(error).not.ok;
-                    imageDiff({
-                        actualImage: previewImage,
-                        expectedImage: path.join(__dirname, 'expected', 'png', 'css.vertical.mixed.html.png'),
-                        diffImage: path.join(__dirname, '..', 'tmp', 'view', 'png', 'css.mixed.html.diff.png')
-                    }, function (error, imagesAreSame) {
-                        should(error).not.ok;
-                        should.ok(imagesAreSame, 'The generated CSS preview doesn\'t match the expected one!');
-                        done();
-                    });
-                });
+                done();
             });
         });
 
@@ -904,18 +597,6 @@ describe('svg-sprite', function () {
                 });
             });
 
-            it('creates visually correct sprite', function (done) {
-                this.timeout(20000);
-                compareSvg2Png(
-                    path.join(__dirname, '..', 'tmp', 'view', 'svg', svg.horizontal),
-                    path.join(__dirname, '..', 'tmp', 'view', 'png', 'css.horizontal.mixed.png'),
-                    path.join(__dirname, 'expected', 'png', 'css.horizontal.mixed.png'),
-                    path.join(__dirname, '..', 'tmp', 'view', 'png', 'css.horizontal.mixed.diff.png'),
-                    done,
-                    'The horizontal sprite doesn\'t match the expected one!'
-                );
-            });
-
             it('creates a visually correct stylesheet resource', function (done) {
                 this.timeout(20000);
 
@@ -928,22 +609,10 @@ describe('svg-sprite', function () {
 
                         data.css = '../sprite.mixed.scss.css';
                         var out = mustache.render(previewTemplate, data),
-                            preview = writeFile(path.join(__dirname, '..', 'tmp', 'view', 'html', 'scss.horizontal.mixed.html'), out),
-                            previewImage = path.join(__dirname, '..', 'tmp', 'view', 'png', 'scss.horizontal.mixed.html.png');
+                            preview = writeFile(path.join(__dirname, '..', 'tmp', 'view', 'html', 'scss.horizontal.mixed.html'), out);
                         preview.should.be.ok;
 
-                        capturePhantom(preview, previewImage, function (error) {
-                            should(error).not.ok;
-                            imageDiff({
-                                actualImage: previewImage,
-                                expectedImage: path.join(__dirname, 'expected', 'png', 'css.horizontal.mixed.html.png'),
-                                diffImage: path.join(__dirname, '..', 'tmp', 'view', 'png', 'scss.horizontal.mixed.html.diff.png')
-                            }, function (error, imagesAreSame) {
-                                should(error).not.ok;
-                                should.ok(imagesAreSame, 'The generated Sass preview doesn\'t match the expected one!');
-                                done();
-                            });
-                        });
+                        done();
                     }
                 );
             });
@@ -985,18 +654,6 @@ describe('svg-sprite', function () {
                 });
             });
 
-            it('creates visually correct sprite', function (done) {
-                this.timeout(20000);
-                compareSvg2Png(
-                    path.join(__dirname, '..', 'tmp', 'view', 'svg', svg.packed),
-                    path.join(__dirname, '..', 'tmp', 'view', 'png', 'css.packed.mixed.png'),
-                    path.join(__dirname, 'expected', 'png', 'css.packed.aligned.png'),
-                    path.join(__dirname, '..', 'tmp', 'view', 'png', 'css.packed.mixed.diff.png'),
-                    done,
-                    'The packed sprite doesn\'t match the expected one!'
-                );
-            });
-
             it('creates a visually correct stylesheet resource', function (done) {
                 this.timeout(20000);
 
@@ -1010,22 +667,10 @@ describe('svg-sprite', function () {
 
                         data.css = '../sprite.mixed.less.css';
                         var out = mustache.render(previewTemplate, data),
-                            preview = writeFile(path.join(__dirname, '..', 'tmp', 'view', 'html', 'less.packed.mixed.html'), out),
-                            previewImage = path.join(__dirname, '..', 'tmp', 'view', 'png', 'less.packed.mixed.html.png');
+                            preview = writeFile(path.join(__dirname, '..', 'tmp', 'view', 'html', 'less.packed.mixed.html'), out);
                         preview.should.be.ok;
 
-                        capturePhantom(preview, previewImage, function (error) {
-                            should(error).not.ok;
-                            imageDiff({
-                                actualImage: previewImage,
-                                expectedImage: path.join(__dirname, 'expected', 'png', 'css.packed.aligned.html.png'),
-                                diffImage: path.join(__dirname, '..', 'tmp', 'view', 'png', 'less.packed.mixed.html.diff.png')
-                            }, function (error, imagesAreSame) {
-                                should(error).not.ok;
-                                should.ok(imagesAreSame, 'The generated LESS preview doesn\'t match the expected one!');
-                                done();
-                            });
-                        });
+                        done();
                     });
                 });
             });

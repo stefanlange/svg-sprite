@@ -6,10 +6,10 @@
   "homepage": "https://github.com/jkphl/svg-sprite",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jkphl/svg-sprite.git"
+    "url": "https://github.com/stefanlange/svg-sprite.git"
   },
   "bugs": {
-    "url": "https://github.com/jkphl/svg-sprite/issues"
+    "url": "https://github.com/stefanlange/svg-sprite/issues"
   },
   "license": "MIT",
   "engines": {
@@ -48,7 +48,6 @@
     "mkdirp": "^0.5.1",
     "mocha": "^5.2.0",
     "mustache": "^3.0.0",
-    "phantomjs-prebuilt": "^2.1.16",
     "prettysize": "^1.1.0",
     "should": "^13.2.3",
     "svgo": "^1.1.1",
@@ -71,7 +70,6 @@
     "rimraf": "",
     "should": "",
     "stylus": "^0.54.5",
-    "svg2png": "github:jkphl/svg2png",
     "vinyl-fs": "^3.0.3"
   },
   "keywords": [
